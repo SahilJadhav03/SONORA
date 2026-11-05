@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" fill="none">
+  <defs>
+    <linearGradient id="sonoraGradient512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00F59B" />
+      <stop offset="100%" stop-color="#8B5CF6" />
+    </linearGradient>
+    <radialGradient id="sonoraAura512" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00F59B" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <!-- Background Disc -->
+  <rect width="512" height="512" rx="112" fill="#060709" />
+  <circle cx="256" cy="256" r="220" fill="url(#sonoraAura512)" />
+  <circle cx="256" cy="256" r="210" fill="#0B0D12" stroke="url(#sonoraGradient512)" stroke-width="10" />
+  
+  <!-- Soundwave S motif -->
+  <path d="M154 304C154 266 192 245 256 245C320 245 358 218 358 181C358 149 320 128 256 128C197 128 165 154 160 181" stroke="#00F59B" stroke-width="26" stroke-linecap="round" />
+  <path d="M358 208C358 245 320 267 256 267C192 267 154 294 154 331C154 363 192 384 256 384C315 384 347 358 352 331" stroke="#8B5CF6" stroke-width="26" stroke-linecap="round" />
+  
+  <!-- Center pulse dot -->
+  <circle cx="256" cy="256" r="26" fill="#00F59B" />
+</svg>

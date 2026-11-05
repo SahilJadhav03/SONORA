@@ -1,0 +1,90 @@
+{
+  "name": "SONORA — Nocturne & Resonance",
+  "short_name": "SONORA",
+  "description": "Ultra-luxury audiophile music streaming web application inspired by Apple Music and Spotify.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#060709",
+  "theme_color": "#060709",
+  "orientation": "any",
+  "lang": "en",
+  "scope": "/",
+  "categories": ["music", "entertainment", "audio"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Search & Explore",
+      "short_name": "Search",
+      "description": "Fuzzy sonic search across tracks, albums, artists",
+      "url": "/search",
+      "icons": [
+        {
+          "src": "/icons/icon-192.svg",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Your Music Library",
+      "short_name": "Library",
+      "description": "Liked tracks, custom playlists, and vinyl coverflow",
+      "url": "/library",
+      "icons": [
+        {
+          "src": "/icons/icon-192.svg",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Now Playing",
+      "short_name": "Player",
+      "description": "Full-screen theatre and real-time audio spectrum",
+      "url": "/now-playing",
+      "icons": [
+        {
+          "src": "/icons/icon-192.svg",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

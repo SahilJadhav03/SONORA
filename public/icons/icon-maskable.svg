@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" fill="none">
+  <defs>
+    <linearGradient id="sonoraGradientMaskable" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00F59B" />
+      <stop offset="100%" stop-color="#8B5CF6" />
+    </linearGradient>
+  </defs>
+  <!-- Full Bleed Maskable Safe Zone Background -->
+  <rect width="512" height="512" fill="#060709" />
+  <circle cx="256" cy="256" r="180" fill="#0B0D12" stroke="url(#sonoraGradientMaskable)" stroke-width="8" />
+  
+  <!-- Soundwave S motif centered within 70% safe zone -->
+  <path d="M168 296C168 264 200 246 256 246C312 246 344 223 344 192C344 165 312 147 256 147C205 147 178 169 173 192" stroke="#00F59B" stroke-width="22" stroke-linecap="round" />
+  <path d="M344 216C344 248 312 266 256 266C200 266 168 289 168 320C168 347 200 365 256 365C307 365 334 343 339 320" stroke="#8B5CF6" stroke-width="22" stroke-linecap="round" />
+  
+  <!-- Center pulse dot -->
+  <circle cx="256" cy="256" r="22" fill="#00F59B" />
+</svg>
