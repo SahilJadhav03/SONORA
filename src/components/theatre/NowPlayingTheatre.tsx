@@ -303,6 +303,22 @@ export const NowPlayingTheatre: React.FC = () => {
 
               {/* Badges: Audio Master & Sonic DNA */}
               <div className="flex items-center gap-2 pt-1 flex-wrap">
+                {currentTrack.sourceBadge && (
+                  <span
+                    className={cn(
+                      'px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border',
+                      currentTrack.source === 'audius'
+                        ? 'bg-emerald/15 text-emerald border-emerald/30'
+                        : currentTrack.source === 'itunes'
+                        ? 'bg-sky-500/15 text-sky-400 border-sky-500/30'
+                        : currentTrack.source === 'local'
+                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                        : 'bg-white/10 text-content-secondary border-white/10'
+                    )}
+                  >
+                    {currentTrack.sourceBadge}
+                  </span>
+                )}
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald/15 text-emerald border border-emerald/25 flex items-center gap-1 font-mono">
                   <Sparkles className="w-2.5 h-2.5" />
                   {currentTrack.audioQuality || 'LOSSLESS 24-BIT / 96kHz'}

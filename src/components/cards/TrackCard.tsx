@@ -52,6 +52,26 @@ export const TrackCard: React.FC<TrackCardProps> = ({
           style={{ backgroundColor: track.accentColor || '#00F59B' }}
         />
 
+        {/* Source Badge Pill */}
+        {track.sourceBadge && (
+          <div className="absolute top-2 left-2 z-10">
+            <span
+              className={cn(
+                'px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold tracking-wider backdrop-blur-md border shadow-sm',
+                track.source === 'audius'
+                  ? 'bg-emerald/90 text-canvas border-emerald font-extrabold'
+                  : track.source === 'itunes'
+                  ? 'bg-sky-500/90 text-white border-sky-400 font-extrabold'
+                  : track.source === 'local'
+                  ? 'bg-amber-500/90 text-canvas border-amber-400 font-extrabold'
+                  : 'bg-black/60 text-white border-white/20'
+              )}
+            >
+              {track.sourceBadge}
+            </span>
+          </div>
+        )}
+
         {/* Floating Play Action FAB */}
         <button
           onClick={handlePlayClick}

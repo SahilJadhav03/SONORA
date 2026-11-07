@@ -31,7 +31,11 @@ export interface Track {
   producer?: string;
   composer?: string;
   releaseDate?: string;
+  source?: 'audius' | 'itunes' | 'local' | 'catalog';
+  sourceBadge?: string;
 }
+
+export type MusicSourceFilter = 'all' | 'audius' | 'itunes' | 'local';
 
 export interface Album {
   id: string;

@@ -3,6 +3,7 @@ import { Track } from '../types/music';
 import { RepeatMode, EQPresetId } from '../types/audio';
 import { mockTracks } from '../data/mockData';
 import { audioEngine, EQ_PRESETS } from '../services/audio/AudioEngine';
+import { fetchTrackLyrics, enrichLocalAudioTrack } from '../services/musicApi';
 
 // Fisher-Yates in-place shuffle keeping the active track first
 const shuffleFisherYates = (tracks: Track[], currentTrackId?: string): Track[] => {
@@ -75,6 +76,7 @@ interface AudioStoreState {
   isEQOpen: boolean;
   waveformMode: 'progress' | 'waveform';
   isSingMode: boolean;
+  localTracks: Track[];
 
   // Actions
   playTrack: (track: Track, contextTracks?: Track[]) => void;
@@ -103,6 +105,7 @@ interface AudioStoreState {
   toggleSingMode: () => void;
   setSingMode: (enabled: boolean) => void;
   loadLocalAudioFile: (file: File) => Track;
+  loadMultipleLocalAudioFiles: (files: FileList | File[]) => Promise<Track[]>;
 }
 
 export const useAudioStore = create<AudioStoreState>((set, get) => ({
@@ -117,6 +120,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
   queue: mockTracks.slice(1),
   history: [],
   originalQueue: mockTracks.slice(1),
+  localTracks: [],
 
   eqPreset: savedPrefs.eqPreset,
   eqGains: savedPrefs.eqGains,
@@ -145,6 +149,23 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
 
     // Feed to Hardware Web Audio Engine
     audioEngine.loadTrack(track.audioUrl, true);
+
+    // Background fetch real time-synced karaoke lyrics via LRCLIB if not already present
+    if (!track.lyrics || track.lyrics.length === 0) {
+      fetchTrackLyrics(track.artistName, track.title, track.duration).then((lyrics) => {
+        if (lyrics && lyrics.length > 0) {
+          set((s) => {
+            const patch = (t: Track): Track => (t.id === track.id ? { ...t, lyrics } : t);
+            return {
+              currentTrack: s.currentTrack?.id === track.id ? { ...s.currentTrack, lyrics } : s.currentTrack,
+              queue: s.queue.map(patch),
+              originalQueue: s.originalQueue.map(patch),
+              localTracks: s.localTracks.map(patch),
+            };
+          });
+        }
+      }).catch(() => {});
+    }
 
     // Update OS-level MediaSession
     if ('mediaSession' in navigator) {
@@ -351,8 +372,86 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     set({ isSingMode: enabled });
   },
 
+  loadMultipleLocalAudioFiles: async (files: FileList | File[]): Promise<Track[]> => {
+    const fileArray = Array.from(files).filter(
+      (f) => f.type.startsWith('audio/') || /\.(mp3|wav|flac|ogg|m4a|aac)$/i.test(f.name)
+    );
+    if (fileArray.length === 0) return [];
+
+    const newTracks: Track[] = fileArray.map((file, idx) => {
+      const url = URL.createObjectURL(file);
+      const cleanName = file.name.replace(/\.[^/.]+$/, '');
+      let artistName = 'Local Audiophile Master';
+      let title = cleanName;
+
+      if (cleanName.includes(' - ')) {
+        const parts = cleanName.split(' - ');
+        artistName = parts[0].trim();
+        title = parts.slice(1).join(' - ').trim();
+      }
+
+      return {
+        id: `local-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+        title,
+        artistName,
+        artistId: 'local-artist',
+        albumTitle: 'Local Master Vault',
+        albumId: 'local-vault',
+        duration: 180,
+        audioUrl: url,
+        coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+        explicit: false,
+        playsCount: 1,
+        accentColor: '#00F59B',
+        source: 'local' as const,
+        sourceBadge: 'LOCAL FILE',
+        audioQuality: 'LOCAL MASTER • LOSSLESS',
+      };
+    });
+
+    const updatedLocal = [...get().localTracks, ...newTracks];
+    set({ localTracks: updatedLocal });
+
+    // Play first imported track immediately
+    get().playTrack(newTracks[0], [...newTracks, ...get().queue]);
+
+    // Trigger background metadata & lyrics enrichment for each file
+    fileArray.forEach((file, idx) => {
+      const trackId = newTracks[idx].id;
+      enrichLocalAudioTrack(file.name).then((meta) => {
+        set((state) => {
+          const patchTrack = (t: Track): Track => {
+            if (t.id !== trackId) return t;
+            return {
+              ...t,
+              title: meta.title || t.title,
+              artistName: meta.artistName || t.artistName,
+              albumTitle: meta.albumTitle || t.albumTitle,
+              coverUrl: meta.coverUrl || t.coverUrl,
+              releaseDate: meta.releaseDate || t.releaseDate,
+              lyrics: meta.lyrics || t.lyrics,
+            };
+          };
+
+          const updatedCurrent =
+            state.currentTrack && state.currentTrack.id === trackId
+              ? patchTrack(state.currentTrack)
+              : state.currentTrack;
+
+          return {
+            currentTrack: updatedCurrent,
+            localTracks: state.localTracks.map(patchTrack),
+            queue: state.queue.map(patchTrack),
+            originalQueue: state.originalQueue.map(patchTrack),
+          };
+        });
+      }).catch((err) => console.warn('Local file enrichment notice:', err));
+    });
+
+    return newTracks;
+  },
+
   loadLocalAudioFile: (file: File): Track => {
-    const url = URL.createObjectURL(file);
     const cleanName = file.name.replace(/\.[^/.]+$/, '');
     let artistName = 'Local Audiophile Master';
     let title = cleanName;
@@ -360,7 +459,7 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
     if (cleanName.includes(' - ')) {
       const parts = cleanName.split(' - ');
       artistName = parts[0].trim();
-      title = parts[1].trim();
+      title = parts.slice(1).join(' - ').trim();
     }
 
     const localTrack: Track = {
@@ -370,16 +469,50 @@ export const useAudioStore = create<AudioStoreState>((set, get) => ({
       artistId: 'local-artist',
       albumTitle: 'Local Master Vault',
       albumId: 'local-vault',
-      duration: 180, // Default duration until metadata parses
-      audioUrl: url,
+      duration: 180,
+      audioUrl: URL.createObjectURL(file),
       coverUrl:
         'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
       explicit: false,
       playsCount: 1,
       accentColor: '#00F59B',
+      source: 'local' as const,
+      sourceBadge: 'LOCAL FILE',
+      audioQuality: 'LOCAL MASTER • LOSSLESS',
     };
 
+    set((s) => ({ localTracks: [...s.localTracks, localTrack] }));
     get().playTrack(localTrack);
+
+    enrichLocalAudioTrack(file.name).then((meta) => {
+      set((state) => {
+        const patchTrack = (t: Track): Track => {
+          if (t.id !== localTrack.id) return t;
+          return {
+            ...t,
+            title: meta.title || t.title,
+            artistName: meta.artistName || t.artistName,
+            albumTitle: meta.albumTitle || t.albumTitle,
+            coverUrl: meta.coverUrl || t.coverUrl,
+            releaseDate: meta.releaseDate || t.releaseDate,
+            lyrics: meta.lyrics || t.lyrics,
+          };
+        };
+
+        const updatedCurrent =
+          state.currentTrack && state.currentTrack.id === localTrack.id
+            ? patchTrack(state.currentTrack)
+            : state.currentTrack;
+
+        return {
+          currentTrack: updatedCurrent,
+          localTracks: state.localTracks.map(patchTrack),
+          queue: state.queue.map(patchTrack),
+          originalQueue: state.originalQueue.map(patchTrack),
+        };
+      });
+    }).catch(() => {});
+
     return localTrack;
   },
 }));

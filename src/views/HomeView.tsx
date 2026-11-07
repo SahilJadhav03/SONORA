@@ -1,6 +1,17 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Compass, Flame, Radio, Music2, Heart } from 'lucide-react';
+import {
+  Sparkles,
+  Compass,
+  Flame,
+  Radio,
+  Music2,
+  Heart,
+  Globe,
+  Music,
+  HardDrive,
+  Upload,
+} from 'lucide-react';
 import { mockTracks, mockAlbums, mockArtists, mockPlaylists } from '../data/mockData';
 import { QuickReplayTile } from '../components/cards/QuickReplayTile';
 import { ComponentShelf } from '../components/cards/ComponentShelf';
@@ -9,11 +20,35 @@ import { AlbumCard } from '../components/cards/AlbumCard';
 import { ArtistCard } from '../components/cards/ArtistCard';
 import { PlaylistCard } from '../components/cards/PlaylistCard';
 import { TracklistTable } from '../components/table/TracklistTable';
+import { LocalAudioImporter } from '../components/player/LocalAudioImporter';
 import { useAudioStore } from '../stores/useAudioStore';
+import { fetchAudiusTrending } from '../services/musicApi';
+import { Track, MusicSourceFilter } from '../types/music';
+import { cn } from '../utils/cn';
+
+const SOURCE_PILLS: {
+  id: MusicSourceFilter;
+  label: string;
+  badge: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  { id: 'all', label: 'All Sources', badge: 'Multi-Source', icon: Globe },
+  { id: 'audius', label: 'Full Tracks (Audius)', badge: '320kbps MP3', icon: Radio },
+  { id: 'itunes', label: 'Global Catalog (Apple)', badge: 'Apple Music', icon: Music },
+  { id: 'local', label: 'My Local Files', badge: 'Lossless Vault', icon: HardDrive },
+];
 
 export const HomeView: React.FC = () => {
   const navigate = useNavigate();
   const playTrack = useAudioStore((s) => s.playTrack);
+  const localTracks = useAudioStore((s) => s.localTracks);
+
+  const [activeSource, setActiveSource] = useState<MusicSourceFilter>('all');
+  const [audiusTrending, setAudiusTrending] = useState<Track[]>([]);
+
+  useEffect(() => {
+    fetchAudiusTrending(12).then(setAudiusTrending);
+  }, []);
 
   // Time-aware personalized greeting
   const getGreeting = () => {
@@ -45,6 +80,38 @@ export const HomeView: React.FC = () => {
           </p>
         </div>
 
+        {/* Music Source Filter Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-2">
+          {SOURCE_PILLS.map((pill) => {
+            const IconComp = pill.icon;
+            const isActive = activeSource === pill.id;
+
+            return (
+              <button
+                key={pill.id}
+                onClick={() => setActiveSource(pill.id)}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 border',
+                  isActive
+                    ? 'bg-emerald text-canvas border-emerald shadow-glow-emerald font-bold'
+                    : 'bg-surface-2 text-content-secondary border-white/5 hover:text-white hover:bg-surface-3'
+                )}
+              >
+                <IconComp className="w-3.5 h-3.5" />
+                <span>{pill.label}</span>
+                <span
+                  className={cn(
+                    'text-[9px] px-1.5 py-0.2 rounded-full font-mono font-medium',
+                    isActive ? 'bg-canvas/20 text-canvas' : 'bg-white/10 text-content-tertiary'
+                  )}
+                >
+                  {pill.badge}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* 2. Recently Played: Quick 6-Grid */}
         <div className="pt-2">
           <h2 className="text-xs font-bold uppercase tracking-wider text-content-tertiary mb-3 flex items-center gap-2">
@@ -62,6 +129,54 @@ export const HomeView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Live Audius Trending Shelf (Full 320kbps Streams - Free Public API) */}
+      {(activeSource === 'all' || activeSource === 'audius') && audiusTrending.length > 0 && (
+        <ComponentShelf
+          title="Trending on Audius • Full 320kbps Streams"
+          seeAllLabel="Explore full tracks"
+          onSeeAll={() => navigate('/search')}
+        >
+          {audiusTrending.map((track) => (
+            <div key={track.id} className="w-40 sm:w-48 shrink-0">
+              <TrackCard track={track} contextTracks={audiusTrending} />
+            </div>
+          ))}
+        </ComponentShelf>
+      )}
+
+      {/* Local Master Vault (Decoded locally in browser memory) */}
+      {(activeSource === 'all' || activeSource === 'local') && localTracks.length > 0 && (
+        <ComponentShelf
+          title="My Local Audio Vault"
+          seeAllLabel="View local library"
+          onSeeAll={() => navigate('/search')}
+        >
+          {localTracks.map((track) => (
+            <div key={track.id} className="w-40 sm:w-48 shrink-0">
+              <TrackCard track={track} contextTracks={localTracks} />
+            </div>
+          ))}
+        </ComponentShelf>
+      )}
+
+      {/* Local Importer Drop Zone (if Local source selected and no local tracks yet) */}
+      {activeSource === 'local' && localTracks.length === 0 && (
+        <div className="border border-dashed border-white/10 rounded-2xl p-10 flex flex-col items-center justify-center text-center bg-surface-1/30 space-y-4">
+          <div className="w-16 h-16 rounded-full bg-emerald/10 border border-emerald/20 flex items-center justify-center text-emerald">
+            <Upload className="w-8 h-8" />
+          </div>
+          <div className="max-w-md space-y-1">
+            <h3 className="text-lg font-bold text-white font-display">
+              No Local Masters Loaded Yet
+            </h3>
+            <p className="text-xs text-content-secondary">
+              Drop any .mp3, .wav or .flac file here for instant zero-server DSP playback, 5-band EQ, and LRCLIB lyrics.
+            </p>
+          </div>
+          <LocalAudioImporter>Import Local Audio</LocalAudioImporter>
+        </div>
+      )}
 
       {/* 3. Made For You Shelf */}
       <ComponentShelf

@@ -129,6 +129,22 @@ const TracklistRowComponent: React.FC<TracklistRowProps> = ({
                 E
               </span>
             )}
+            {track.sourceBadge && (
+              <span
+                className={cn(
+                  'px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider shrink-0 border',
+                  track.source === 'audius'
+                    ? 'bg-emerald/15 text-emerald border-emerald/30'
+                    : track.source === 'itunes'
+                    ? 'bg-sky-500/15 text-sky-400 border-sky-500/30'
+                    : track.source === 'local'
+                    ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                    : 'bg-white/10 text-content-secondary border-white/10'
+                )}
+              >
+                {track.sourceBadge}
+              </span>
+            )}
           </div>
           <span className="text-xs text-content-secondary truncate group-hover:text-content-primary/80">
             {track.artistName}

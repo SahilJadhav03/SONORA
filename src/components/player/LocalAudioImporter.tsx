@@ -10,22 +10,38 @@ export const LocalAudioImporter: React.FC<{ className?: string; children?: React
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const loadLocalAudioFile = useAudioStore((s) => s.loadLocalAudioFile);
+  const loadMultipleLocalAudioFiles = useAudioStore((s) => s.loadMultipleLocalAudioFiles);
   const addToast = useUIStore((s) => s.addToast);
 
-  const handleFiles = (files: FileList | null) => {
+  const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const file = files[0];
-    if (file.type.startsWith('audio/') || /\.(mp3|wav|flac|ogg|m4a|aac)$/i.test(file.name)) {
-      const track = loadLocalAudioFile(file);
-      addToast({
-        type: 'success',
-        message: `Imported "${track.title}" to local session`,
-      });
-    } else {
+
+    const audioFiles = Array.from(files).filter(
+      (f) => f.type.startsWith('audio/') || /\.(mp3|wav|flac|ogg|m4a|aac)$/i.test(f.name)
+    );
+
+    if (audioFiles.length === 0) {
       addToast({
         type: 'info',
-        message: 'Please drop a valid audio file (.mp3, .wav, .flac, .ogg, .m4a)',
+        message: 'Please select valid audio files (.mp3, .wav, .flac, .ogg, .m4a)',
+      });
+      return;
+    }
+
+    addToast({
+      type: 'info',
+      message: `Importing ${audioFiles.length} master track(s)... Auto-enriching metadata & lyrics`,
+    });
+
+    const loadedTracks = await loadMultipleLocalAudioFiles(audioFiles);
+
+    if (loadedTracks.length > 0) {
+      addToast({
+        type: 'success',
+        message:
+          loadedTracks.length === 1
+            ? `Now Playing: "${loadedTracks[0].title}"`
+            : `Loaded ${loadedTracks.length} tracks into queue. Playing "${loadedTracks[0].title}"`,
       });
     }
   };
@@ -76,6 +92,7 @@ export const LocalAudioImporter: React.FC<{ className?: string; children?: React
         ref={fileInputRef}
         type="file"
         accept="audio/*,.mp3,.wav,.flac,.ogg,.m4a"
+        multiple
         onChange={handleInputChange}
         className="hidden"
       />

@@ -65,13 +65,31 @@ export const PlayerTrackInfo: React.FC<{ className?: string }> = ({ className })
         >
           {currentTrack.title}
         </h4>
-        <p
-          onClick={() => navigate(`/artist/${currentTrack.artistId}`)}
-          className="text-xs text-content-secondary truncate hover:text-white hover:underline cursor-pointer"
-          title={currentTrack.artistName}
-        >
-          {currentTrack.artistName}
-        </p>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <p
+            onClick={() => navigate(`/artist/${currentTrack.artistId}`)}
+            className="text-xs text-content-secondary truncate hover:text-white hover:underline cursor-pointer"
+            title={currentTrack.artistName}
+          >
+            {currentTrack.artistName}
+          </p>
+          {currentTrack.sourceBadge && (
+            <span
+              className={cn(
+                'px-1 py-0.2 rounded text-[8px] font-mono font-bold tracking-wider shrink-0 border',
+                currentTrack.source === 'audius'
+                  ? 'bg-emerald/15 text-emerald border-emerald/30'
+                  : currentTrack.source === 'itunes'
+                  ? 'bg-sky-500/15 text-sky-400 border-sky-500/30'
+                  : currentTrack.source === 'local'
+                  ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                  : 'bg-white/10 text-content-secondary border-white/10'
+              )}
+            >
+              {currentTrack.sourceBadge}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Magnetic Favorite Heart Button */}

@@ -13,16 +13,29 @@ import {
   Compass,
   Sliders,
   Music2,
+  Globe,
+  Radio,
+  Music,
+  HardDrive,
+  Loader2,
+  Upload,
 } from 'lucide-react';
 import { musicRepository } from '../data/repository/MockMusicRepository';
 import { SearchResults } from '../data/repository/IMusicRepository';
-import { GenreCategory, Track, Artist, Album, Playlist } from '../types/music';
+import { GenreCategory, Track, Artist, Album, Playlist, MusicSourceFilter } from '../types/music';
+import {
+  searchAllMusic,
+  searchAudiusTracks,
+  searchItunesCatalog,
+  fetchAudiusTrending,
+} from '../services/musicApi';
 import { CategoryCard } from '../components/cards/CategoryCard';
 import { TracklistTable } from '../components/table/TracklistTable';
 import { AlbumCard } from '../components/cards/AlbumCard';
 import { ArtistCard } from '../components/cards/ArtistCard';
 import { PlaylistCard } from '../components/cards/PlaylistCard';
 import { EmptyState } from '../components/feedback/EmptyState';
+import { LocalAudioImporter } from '../components/player/LocalAudioImporter';
 import { useAudioStore } from '../stores/useAudioStore';
 import { useUIStore } from '../stores/useUIStore';
 import { useContextMenuStore } from '../stores/useContextMenuStore';
@@ -31,6 +44,18 @@ import { cn } from '../utils/cn';
 
 type FilterType = 'all' | 'songs' | 'artists' | 'albums' | 'playlists';
 type SonicMood = 'All' | 'Chill' | 'High Energy' | 'Late Night' | 'Focus' | 'Bass Heavy' | 'Instrumental';
+
+const SOURCE_PILLS: {
+  id: MusicSourceFilter;
+  label: string;
+  badge: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  { id: 'all', label: 'All Sources', badge: 'Multi-Source', icon: Globe },
+  { id: 'audius', label: 'Full Tracks (Audius)', badge: '320kbps MP3', icon: Radio },
+  { id: 'itunes', label: 'Global Catalog (Apple)', badge: 'Apple Music', icon: Music },
+  { id: 'local', label: 'My Local Files', badge: 'Lossless Vault', icon: HardDrive },
+];
 
 const SONIC_PILLS: { id: SonicMood; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'All', label: 'All Moods', icon: Sparkles },
@@ -50,19 +75,24 @@ export const SearchView: React.FC = () => {
   const [categories, setCategories] = useState<GenreCategory[]>([]);
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [activeMood, setActiveMood] = useState<SonicMood>('All');
-  const [results, setResults] = useState<SearchResults>({
-    tracks: [],
-    albums: [],
-    artists: [],
-    playlists: [],
-  });
+  const [sourceFilter, setSourceFilter] = useState<MusicSourceFilter>('all');
+  const [isSearchingRemote, setIsSearchingRemote] = useState(false);
+  const [audiusTrending, setAudiusTrending] = useState<Track[]>([]);
 
+  const localTracks = useAudioStore((s) => s.localTracks);
   const playTrack = useAudioStore((s) => s.playTrack);
   const searchHistory = useUIStore((s) => s.searchHistory);
   const removeSearchHistoryItem = useUIStore((s) => s.removeSearchHistoryItem);
   const clearSearchHistory = useUIStore((s) => s.clearSearchHistory);
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const openContextMenu = useContextMenuStore((s) => s.openContextMenu);
+
+  const [results, setResults] = useState<SearchResults>({
+    tracks: [],
+    albums: [],
+    artists: [],
+    playlists: [],
+  });
 
   const searchSuggestions = [
     'Aetheric Mirage',
@@ -78,13 +108,86 @@ export const SearchView: React.FC = () => {
     musicRepository.getGenres().then(setCategories);
   }, []);
 
+  // Fetch Audius trending when Audius tab is selected
   useEffect(() => {
-    if (query) {
-      musicRepository.search(query).then(setResults);
-    } else {
-      setResults({ tracks: [], albums: [], artists: [], playlists: [] });
+    if (sourceFilter === 'audius' && audiusTrending.length === 0) {
+      fetchAudiusTrending(24).then(setAudiusTrending);
     }
-  }, [query]);
+  }, [sourceFilter, audiusTrending.length]);
+
+  // Main debounced search effect across public APIs and local repository
+  useEffect(() => {
+    if (!query.trim()) {
+      setResults({ tracks: [], albums: [], artists: [], playlists: [] });
+      setIsSearchingRemote(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingRemote(true);
+      const cleanQ = query.trim().toLowerCase();
+
+      try {
+        // 1. Curated mock repository search
+        const repoResults = await musicRepository.search(query);
+
+        // 2. Filter local imported files
+        const matchingLocalTracks = localTracks.filter(
+          (t) =>
+            t.title.toLowerCase().includes(cleanQ) ||
+            t.artistName.toLowerCase().includes(cleanQ) ||
+            t.albumTitle.toLowerCase().includes(cleanQ)
+        );
+
+        // 3. Multi-source public API queries
+        let remoteTracks: Track[] = [];
+
+        if (sourceFilter === 'audius') {
+          remoteTracks = await searchAudiusTracks(query, 30);
+        } else if (sourceFilter === 'itunes') {
+          remoteTracks = await searchItunesCatalog(query, 30);
+        } else if (sourceFilter === 'local') {
+          remoteTracks = [];
+        } else {
+          // 'all': parallel query Audius + iTunes
+          remoteTracks = await searchAllMusic(query, 'all', 30);
+        }
+
+        // 4. Merge tracks based on active source filter
+        let mergedTracks: Track[] = [];
+        if (sourceFilter === 'local') {
+          mergedTracks = matchingLocalTracks;
+        } else if (sourceFilter === 'audius' || sourceFilter === 'itunes') {
+          mergedTracks = remoteTracks;
+        } else {
+          // 'all': prioritize local matches, then live remote tracks, then curated mock tracks
+          mergedTracks = [...matchingLocalTracks, ...remoteTracks, ...repoResults.tracks];
+        }
+
+        // Deduplicate tracks by id
+        const seenIds = new Set<string>();
+        const uniqueTracks = mergedTracks.filter((t) => {
+          if (seenIds.has(t.id)) return false;
+          seenIds.add(t.id);
+          return true;
+        });
+
+        setResults({
+          tracks: uniqueTracks,
+          albums: sourceFilter === 'local' ? [] : repoResults.albums,
+          artists: sourceFilter === 'local' ? [] : repoResults.artists,
+          playlists: sourceFilter === 'local' ? [] : repoResults.playlists,
+          topResult: uniqueTracks[0] || repoResults.topResult,
+        });
+      } catch (err) {
+        console.warn('Search query error:', err);
+      } finally {
+        setIsSearchingRemote(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [query, sourceFilter, localTracks]);
 
   const handleQueryChange = (newQ: string) => {
     if (newQ.trim()) {
@@ -184,6 +287,49 @@ export const SearchView: React.FC = () => {
           </div>
         )}
 
+        {/* Music Source Filter Pills (Persistent Multi-Source Navigator) */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+          <span className="text-xs font-bold text-content-tertiary uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1.5">
+            <Globe className="w-3.5 h-3.5 text-emerald" />
+            Source:
+          </span>
+          {SOURCE_PILLS.map((pill) => {
+            const IconComp = pill.icon;
+            const isActive = sourceFilter === pill.id;
+
+            return (
+              <button
+                key={pill.id}
+                onClick={() => setSourceFilter(pill.id)}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 border',
+                  isActive
+                    ? 'bg-emerald text-canvas border-emerald shadow-glow-emerald font-bold'
+                    : 'bg-surface-2 text-content-secondary border-white/5 hover:text-white hover:bg-surface-3'
+                )}
+              >
+                <IconComp className="w-3.5 h-3.5" />
+                <span>{pill.label}</span>
+                <span
+                  className={cn(
+                    'text-[9px] px-1.5 py-0.2 rounded-full font-mono font-medium',
+                    isActive ? 'bg-canvas/20 text-canvas' : 'bg-white/10 text-content-tertiary'
+                  )}
+                >
+                  {pill.badge}
+                </span>
+              </button>
+            );
+          })}
+
+          {isSearchingRemote && (
+            <div className="flex items-center gap-1.5 text-xs text-emerald shrink-0 ml-2 animate-pulse font-mono">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Fetching Public Streams...</span>
+            </div>
+          )}
+        </div>
+
         {/* Suggestion Chips */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
           <span className="text-xs font-semibold text-content-tertiary uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
@@ -258,28 +404,101 @@ export const SearchView: React.FC = () => {
         )}
       </div>
 
-      {/* 2. Empty Query State: Browse Categories & Genre Cards */}
+      {/* 2. Empty Query State: Contextual by Source Filter */}
       {!query ? (
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-white tracking-tight">
-              Browse All Categories & Genres
-            </h1>
-            <p className="text-xs sm:text-sm text-content-secondary mt-1">
-              Explore sonic frequencies crafted for every state of mind
-            </p>
-          </div>
+        sourceFilter === 'local' ? (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-white tracking-tight flex items-center gap-2">
+                  <HardDrive className="w-6 h-6 text-emerald" />
+                  My Local Audio Vault
+                </h1>
+                <p className="text-xs sm:text-sm text-content-secondary mt-1">
+                  Decoded in browser memory with zero server uploads, 5-band EQ DSP, and live LRCLIB synced lyrics
+                </p>
+              </div>
+              <LocalAudioImporter className="self-start sm:self-auto" />
+            </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4">
-            {categories.map((cat) => (
-              <CategoryCard
-                key={cat.id}
-                category={cat}
-                onClick={() => handleCategoryClick(cat)}
-              />
-            ))}
+            {localTracks.length > 0 ? (
+              <div className="p-2 sm:p-4 rounded-xl bg-surface-1/60 border border-white/[0.04]">
+                <TracklistTable tracks={localTracks} showHeader={true} />
+              </div>
+            ) : (
+              <div className="border border-dashed border-white/10 rounded-2xl p-10 flex flex-col items-center justify-center text-center bg-surface-1/30 space-y-4">
+                <div className="w-16 h-16 rounded-full bg-emerald/10 border border-emerald/20 flex items-center justify-center text-emerald">
+                  <Upload className="w-8 h-8" />
+                </div>
+                <div className="max-w-md space-y-1">
+                  <h3 className="text-lg font-bold text-white font-display">
+                    No Local Masters Imported Yet
+                  </h3>
+                  <p className="text-xs text-content-secondary">
+                    Drop your FLAC, WAV, or MP3 files anywhere on the screen, or select multiple files from your disk.
+                  </p>
+                </div>
+                <LocalAudioImporter>Select Audio Files</LocalAudioImporter>
+              </div>
+            )}
           </div>
-        </div>
+        ) : sourceFilter === 'audius' ? (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-white tracking-tight flex items-center gap-2">
+                  <Radio className="w-6 h-6 text-emerald" />
+                  Trending on Audius • Full 320kbps Streams
+                </h1>
+                <p className="text-xs sm:text-sm text-content-secondary mt-1">
+                  Free, full-length streaming straight from the decentralized Audius network
+                </p>
+              </div>
+              {audiusTrending.length > 0 && (
+                <button
+                  onClick={() => playTrack(audiusTrending[0], audiusTrending)}
+                  className="px-4 py-1.5 rounded-full bg-emerald text-canvas text-xs font-bold shadow-glow-emerald hover:scale-105 transition-all"
+                >
+                  Play All
+                </button>
+              )}
+            </div>
+
+            {audiusTrending.length > 0 ? (
+              <div className="p-2 sm:p-4 rounded-xl bg-surface-1/60 border border-white/[0.04]">
+                <TracklistTable tracks={audiusTrending} showHeader={true} />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-16 text-emerald font-mono text-xs gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Connecting to Audius Discovery Provider...</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-white tracking-tight">
+                {sourceFilter === 'itunes' ? 'Apple Music Global Catalog' : 'Browse All Categories & Genres'}
+              </h1>
+              <p className="text-xs sm:text-sm text-content-secondary mt-1">
+                {sourceFilter === 'itunes'
+                  ? 'Search millions of songs, official 1000x1000 album covers, and 30-sec lossless AAC previews'
+                  : 'Explore sonic frequencies crafted for every state of mind'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4">
+              {categories.map((cat) => (
+                <CategoryCard
+                  key={cat.id}
+                  category={cat}
+                  onClick={() => handleCategoryClick(cat)}
+                />
+              ))}
+            </div>
+          </div>
+        )
       ) : hasResults ? (
         /* 3. Search Results with Filter Mode */
         <div className="space-y-10">
