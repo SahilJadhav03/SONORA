@@ -27,6 +27,7 @@ import { useLibraryStore } from '../../stores/useLibraryStore';
 import { mockTracks, mockAlbums, mockArtists, mockPlaylists } from '../../data/mockData';
 import { Track, Album, Artist, Playlist } from '../../types/music';
 import { ThemeAccent } from '../../types/ui';
+import { searchAllMusic } from '../../services/musicApi';
 import { handleImageError } from '../../utils/imageFallback';
 import { cn } from '../../utils/cn';
 
@@ -72,6 +73,8 @@ export const CommandPalette: React.FC = () => {
 
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [liveTracks, setLiveTracks] = useState<Track[]>([]);
+  const localTracks = useAudioStore((s) => s.localTracks);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -79,10 +82,29 @@ export const CommandPalette: React.FC = () => {
   useEffect(() => {
     if (isCommandPaletteOpen) {
       setQuery('');
+      setLiveTracks([]);
       setSelectedIndex(0);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isCommandPaletteOpen]);
+
+  // Query live streaming tracks from Audius and iTunes on user typing
+  useEffect(() => {
+    const clean = query.trim();
+    if (!clean || clean.startsWith('>')) {
+      setLiveTracks([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const results = await searchAllMusic(clean, 'all', 6);
+        setLiveTracks(results);
+      } catch {}
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [query]);
 
   // Command palette actions
   const quickActions: QuickAction[] = [
@@ -237,13 +259,50 @@ export const CommandPalette: React.FC = () => {
       a.title.toLowerCase().includes(actionSearch) || a.subtitle.toLowerCase().includes(actionSearch)
     );
   } else if (cleanQ) {
+    // 0. Primary Action: Jump to full Discover Multi-Source Search
+    const searchInDiscoverAction: QuickAction = {
+      id: 'action-search-discover',
+      type: 'action',
+      title: `Search "${query.trim()}" in Discover`,
+      subtitle: 'Stream full tracks on Audius, Apple Music previews, and lyrics',
+      icon: Search,
+      handler: () => {
+        setCommandPaletteOpen(false);
+        navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+      },
+    };
+
     // 1. Actions matching
     const matchingActions = quickActions.filter(
       (a) => a.title.toLowerCase().includes(cleanQ) || a.subtitle.toLowerCase().includes(cleanQ)
     );
 
-    // 2. Tracks matching title, artist, or lyrics
+    // 2. Tracks matching: Live Audius/Apple tracks, local tracks, and curated mock tracks
     const matchingTracks: PaletteItem[] = [];
+
+    // Add live public API tracks (Audius & iTunes)
+    liveTracks.forEach((t) => {
+      matchingTracks.push({
+        ...t,
+        type: 'track' as const,
+      });
+    });
+
+    // Add local uploaded tracks
+    localTracks.forEach((t) => {
+      if (
+        t.title.toLowerCase().includes(cleanQ) ||
+        t.artistName.toLowerCase().includes(cleanQ) ||
+        t.albumTitle.toLowerCase().includes(cleanQ)
+      ) {
+        matchingTracks.push({
+          ...t,
+          type: 'track' as const,
+        });
+      }
+    });
+
+    // Add curated mock tracks
     mockTracks.forEach((t) => {
       const inTitle = t.title.toLowerCase().includes(cleanQ);
       const inArtist = t.artistName.toLowerCase().includes(cleanQ);
@@ -275,6 +334,7 @@ export const CommandPalette: React.FC = () => {
       .map((p) => ({ ...p, type: 'playlist' as const }));
 
     filteredItems = [
+      searchInDiscoverAction,
       ...matchingActions,
       ...matchingTracks,
       ...matchingArtists,
@@ -477,13 +537,31 @@ export const CommandPalette: React.FC = () => {
                     )}
 
                     <div className="min-w-0 flex flex-col justify-center">
-                      <p className="text-xs sm:text-sm font-bold text-white truncate font-display">
-                        {item.type === 'action' && item.title}
-                        {item.type === 'track' && item.title}
-                        {item.type === 'artist' && item.name}
-                        {item.type === 'album' && item.title}
-                        {item.type === 'playlist' && item.title}
-                      </p>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="text-xs sm:text-sm font-bold text-white truncate font-display">
+                          {item.type === 'action' && item.title}
+                          {item.type === 'track' && item.title}
+                          {item.type === 'artist' && item.name}
+                          {item.type === 'album' && item.title}
+                          {item.type === 'playlist' && item.title}
+                        </p>
+                        {item.type === 'track' && item.sourceBadge && (
+                          <span
+                            className={cn(
+                              'px-1.5 py-0.2 rounded text-[8.5px] font-mono font-bold tracking-wider shrink-0 border',
+                              item.source === 'audius'
+                                ? 'bg-emerald/15 text-emerald border-emerald/30'
+                                : item.source === 'itunes'
+                                ? 'bg-sky-500/15 text-sky-400 border-sky-500/30'
+                                : item.source === 'local'
+                                ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                : 'bg-white/10 text-content-secondary border-white/10'
+                            )}
+                          >
+                            {item.sourceBadge}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-content-secondary truncate">
                         {item.type === 'action' && item.subtitle}
                         {item.type === 'track' && `${item.artistName} • ${item.albumTitle}`}

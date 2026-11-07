@@ -15,6 +15,14 @@ export const TopNavBar: React.FC = () => {
   const addToast = useUIStore((s) => s.addToast);
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
 
+  // Sync search input with URL search param on /search
+  useEffect(() => {
+    if (location.pathname === '/search') {
+      const q = new URLSearchParams(location.search).get('q') || '';
+      setSearchValue(q);
+    }
+  }, [location.pathname, location.search]);
+
   // Close profile dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -74,24 +82,44 @@ export const TopNavBar: React.FC = () => {
         </div>
       </div>
 
-      {/* Center: Raycast-Style Sonic Search Trigger */}
+      {/* Center: Real Global Search Form + ⌘K Command Palette Quick-Trigger */}
       <div className="flex-1 max-w-md mx-auto">
-        <button
-          onClick={() => setCommandPaletteOpen(true)}
-          className="w-full flex items-center justify-between h-10 px-3.5 rounded-full glass-capsule border border-white/10 text-content-secondary hover:border-emerald/40 hover:text-white transition-all shadow-elevation-1 group cursor-pointer"
+        <form
+          onSubmit={handleSearchSubmit}
+          className="relative flex items-center w-full h-10 px-3.5 rounded-full glass-capsule border border-white/10 focus-within:border-emerald/60 focus-within:ring-2 focus-within:ring-emerald/20 transition-all shadow-elevation-1"
         >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <Search className="w-4 h-4 shrink-0 text-emerald" />
-            <span className="text-xs sm:text-sm text-content-muted group-hover:text-content-primary truncate">
-              Search music, lyrics, or type '&gt;' for commands...
-            </span>
-          </div>
-          <div className="flex items-center gap-1 shrink-0 ml-2">
-            <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/10 text-content-tertiary group-hover:text-emerald group-hover:bg-emerald/10 border border-white/5 transition-colors">
-              ⌘K
-            </kbd>
-          </div>
-        </button>
+          <Search className="w-4 h-4 shrink-0 text-emerald mr-2.5" />
+          <input
+            type="text"
+            value={searchValue}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSearchValue(val);
+              if (location.pathname === '/search') {
+                navigate(val.trim() ? `/search?q=${encodeURIComponent(val.trim())}` : '/search', { replace: true });
+              }
+            }}
+            placeholder="Search songs, artists, albums, lyrics..."
+            className="w-full bg-transparent text-xs sm:text-sm text-white placeholder-content-muted focus:outline-none"
+          />
+          {searchValue && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="p-1 rounded-full text-content-tertiary hover:text-white transition-colors mr-1 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setCommandPaletteOpen(true)}
+            title="Open Command Palette (⌘K)"
+            className="flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/10 text-content-tertiary hover:text-emerald hover:bg-emerald/10 border border-white/5 transition-colors cursor-pointer"
+          >
+            ⌘K
+          </button>
+        </form>
       </div>
 
       {/* Right: Premium & User Actions */}

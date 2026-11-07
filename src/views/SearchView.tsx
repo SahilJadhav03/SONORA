@@ -71,6 +71,7 @@ export const SearchView: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const query = searchParams.get('q') || '';
+  const [searchInput, setSearchInput] = useState(query);
 
   const [categories, setCategories] = useState<GenreCategory[]>([]);
   const [filterType, setFilterType] = useState<FilterType>('all');
@@ -78,6 +79,25 @@ export const SearchView: React.FC = () => {
   const [sourceFilter, setSourceFilter] = useState<MusicSourceFilter>('all');
   const [isSearchingRemote, setIsSearchingRemote] = useState(false);
   const [audiusTrending, setAudiusTrending] = useState<Track[]>([]);
+
+  // Sync search input with URL param changes
+  useEffect(() => {
+    setSearchInput(query);
+  }, [query]);
+
+  const handleInputChange = (val: string) => {
+    setSearchInput(val);
+    if (val.trim()) {
+      setSearchParams({ q: val.trim() }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  };
+
+  const handleClear = () => {
+    setSearchInput('');
+    setSearchParams({}, { replace: true });
+  };
 
   const localTracks = useAudioStore((s) => s.localTracks);
   const playTrack = useAudioStore((s) => s.playTrack);
@@ -190,6 +210,7 @@ export const SearchView: React.FC = () => {
   }, [query, sourceFilter, localTracks]);
 
   const handleQueryChange = (newQ: string) => {
+    setSearchInput(newQ);
     if (newQ.trim()) {
       setSearchParams({ q: newQ.trim() });
     } else {
@@ -198,7 +219,7 @@ export const SearchView: React.FC = () => {
   };
 
   const handleCategoryClick = (cat: GenreCategory) => {
-    setSearchParams({ q: cat.title });
+    handleQueryChange(cat.title);
   };
 
   // Filter tracks by active sonic mood if selected
@@ -221,6 +242,36 @@ export const SearchView: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-8 pb-32 md:pb-12 max-w-7xl mx-auto select-none">
+      {/* 0. Primary High-Craft Search Bar */}
+      <div className="relative w-full max-w-2xl">
+        <div className="relative flex items-center">
+          <SearchIcon className="absolute left-4 w-5 h-5 text-emerald pointer-events-none" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => handleInputChange(e.target.value)}
+            placeholder="Search millions of songs, artists, albums, or lyrics..."
+            className="w-full h-12 pl-12 pr-24 rounded-2xl bg-surface-1/90 border border-white/10 text-white placeholder-content-muted text-sm sm:text-base focus:outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/20 transition-all shadow-elevation-1"
+            autoFocus
+          />
+          {searchInput && (
+            <button
+              onClick={handleClear}
+              className="absolute right-12 p-1.5 rounded-full text-content-tertiary hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            onClick={() => setCommandPaletteOpen(true)}
+            className="absolute right-3 px-2 py-1 rounded-lg text-xs font-mono bg-white/5 hover:bg-emerald/15 hover:text-emerald text-content-tertiary border border-white/5 transition-colors cursor-pointer"
+            title="Open Command Palette (⌘K)"
+          >
+            ⌘K
+          </button>
+        </div>
+      </div>
+
       {/* 1. Command Palette Fast-Action Pill & Suggestions */}
       <div className="space-y-4">
         {/* Raycast Quick-Launcher Banner */}
@@ -626,6 +677,21 @@ export const SearchView: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      ) : isSearchingRemote ? (
+        /* Remote Loading State */
+        <div className="py-20 flex flex-col items-center justify-center text-center space-y-4">
+          <div className="w-14 h-14 rounded-full bg-emerald/10 border border-emerald/30 flex items-center justify-center text-emerald animate-spin">
+            <Loader2 className="w-7 h-7" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-lg font-bold font-display text-white">
+              Searching Global & Decentralized Catalogs...
+            </h3>
+            <p className="text-xs text-content-secondary max-w-sm">
+              Connecting Audius 320kbps full streams, Apple Music lossless catalog, and local masters
+            </p>
+          </div>
         </div>
       ) : (
         /* Empty State */
