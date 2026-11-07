@@ -14,4 +14,30 @@ export default defineConfig({
     port: 5173,
     host: true,
   },
+  build: {
+    chunkSizeWarningLimit: 500,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const normalized = id.replace(/\\/g, '/')
+          if (normalized.includes('/node_modules/')) {
+            if (
+              normalized.includes('/react/') ||
+              normalized.includes('/react-dom/') ||
+              normalized.includes('/react-router/') ||
+              normalized.includes('/react-router-dom/')
+            ) {
+              return 'vendor-react'
+            }
+            if (normalized.includes('/framer-motion/')) {
+              return 'vendor-motion'
+            }
+            if (normalized.includes('/lucide-react/')) {
+              return 'vendor-icons'
+            }
+          }
+        },
+      },
+    },
+  },
 })
